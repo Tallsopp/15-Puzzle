@@ -1,0 +1,33 @@
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Module_3
+{
+    abstract class Object:IObjectUpdate
+    {
+        public Vector2 Location;
+        public Rectangle Bounds;
+
+        public Object(Vector2 location, Texture2D image)
+        {
+            Location = location;
+            Bounds = new Rectangle((int)location.X, (int)location.Y, image.Width, image.Height);
+        }
+
+        public Object(Vector2 location)
+        {
+            Location = location;
+        }
+
+        public void Update(float elapsed)
+        {
+            Bounds.X = (int)Location.X;
+            Bounds.Y = (int)Location.Y;
+        }
+    }
+}
