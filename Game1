@@ -1,0 +1,528 @@
+using System;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
+using Microsoft.Xna.Framework.Media;
+using Microsoft.Xna.Framework.Audio;
+using System.Collections.Generic;
+using System.Timers;
+
+namespace Module_3
+{
+    public class Game1 : Game
+    {
+        //variables
+        private GraphicsDeviceManager graphics;
+        private SpriteBatch spriteBatch;
+
+        private const int GAME_HEIGHT = 950;        //window height
+        private const int GAME_WIDTH = 1500;        //window width
+
+        //lists of objects
+        private List<Tile> currentTile;         //list of tiles
+        private List<Jigsaw> currentJigsaw;     //list of jigsaw
+        private List<Boundary> currentBounds;   //list of boundaries
+        private List<Button> currentButtons;    //list of buttons
+        private Empty empty;                     //empty class
+
+        private Rectangle[] jigsawArray;        //array of rectangles for jigsaw puzzle
+
+        private MouseState mouseState;         //mouse states and position
+        private MouseState previousMs;         //stores last mouse state
+        private Point mousePos;               //stores the mouse position
+
+        private enum _gameStates { _start = 1, _tile = 2, _jigsaw = 3, _solved = 4, _win = 5 };             //enumerator for various game states
+        private _gameStates state;              //current state of game    
+
+        private int moves;
+        private Random rng;                   //random number
+        private int min = 300, max = 600;     //minimum and maximum values for random input
+        private Timer gameTimer;              //how many times the game is updated
+        private float elapsed;              //timer to update game
+
+        private SpriteFont basicFont;           //font for the game
+        private Texture2D backgroundTexture;    //background image
+        private Texture2D tileImage;            //tile image
+        private Texture2D buttonImage;          //button image
+        private Texture2D jigsawImage;          //jigsaw image
+
+        private Rectangle destRect;
+
+        private Song backgroundMusic;           //background music
+
+        public Game1()
+        {
+            graphics = new GraphicsDeviceManager(this);
+            graphics.PreferredBackBufferHeight = GAME_HEIGHT;               //sets the height of the game window
+            graphics.PreferredBackBufferWidth = GAME_WIDTH;                 //sets the width of the game window
+            Content.RootDirectory = "Content";
+        }
+
+        //when activated, change the title
+        protected override void OnActivated(object sender, EventArgs args)
+        {
+            Window.Title = "Puzzle Game";
+            base.OnActivated(sender, args);
+        }
+
+        //when deactivated, change the title
+        protected override void OnDeactivated(object sender, EventArgs args)
+        {
+            Window.Title = "Puzzle Game (Paused)";
+            base.OnActivated(sender, args);
+        }
+
+        //initialize all variables
+        protected override void Initialize()
+        {
+            moves = 0;                                  //moves are set to zero
+            rng = new Random();                         //declare random value
+            gameTimer = new Timer(1500);                //timer for game to be updated
+            gameTimer.Enabled = true;                   //game is being called
+            previousMs = Mouse.GetState();              //get the previous mouse state
+            state = _gameStates._start;    //start screen of the game
+
+            destRect = new Rectangle(0, 0, 78, 78);
+
+            base.Initialize();
+        }
+
+        //loads all content i.e. graphics, audio, models
+        protected override void LoadContent()
+        {
+            spriteBatch = new SpriteBatch(GraphicsDevice);
+            backgroundTexture = Content.Load<Texture2D>("background");
+            basicFont = Content.Load<SpriteFont>("Font");
+            tileImage = Content.Load<Texture2D>("tile_piece");
+            buttonImage = Content.Load<Texture2D>("button");
+            jigsawImage = Content.Load<Texture2D>("jigsaw");
+
+            backgroundMusic = Content.Load<Song>("background_music");           //music from www.bensound.com
+            MediaPlayer.Play(backgroundMusic);
+        }
+
+        //when game exits, unloads content
+        protected override void UnloadContent()
+        {
+            // TODO: Unload any non ContentManager content here
+        }
+
+        //main game loop
+        protected override void Update(GameTime gameTime)
+        {
+            //if game is being played
+            if (IsActive)
+            {
+                IsMouseVisible = true;                                            //can see mouse
+                elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;           //float value to update 
+
+                if (state == _gameStates._start || state == _gameStates._solved)
+                    moves = 0;
+
+                CreateButtons();                        //create the buttons
+                ClickOnObjects();                       //player can click on objects
+                UpdateObjects(elapsed);                 //update all the objects
+                base.Update(gameTime);
+            }
+        }
+
+        //button that shuffles the tiles around
+        public void Shuffle(int shuffleCount)
+        {
+            for (int i = 0; i < shuffleCount; i++)
+            {
+                if (state == _gameStates._tile)
+                {
+                    foreach (var tp in currentTile)
+                    {
+                        float distance = Vector2.Distance(empty.Location, tp.Location); //distance between empty tile and each tile
+
+                        //if the mouse is in a tile, && the left button is clicked, && the tile is close enough = swap tiles
+                        if (distance == 78)
+                        {
+                            Vector2 oldPosition = tp.Location;          //stores the previous position of the tile
+
+                            tp.Location = empty.Location;               //move tile to empty position
+                            empty.Location = oldPosition;               //move empty to old position of tile
+                        }
+                    }
+                }
+
+                if (state == _gameStates._jigsaw)
+                {
+                    foreach (var js in currentJigsaw)
+                    {
+                        float distance = Vector2.Distance(empty.Location, js.Location); //distance between empty tile and each tile
+
+                        //if the mouse is in a tile, && the left button is clicked, && the tile is close enough = swap tiles
+                        if (distance == 78)
+                        {
+                            Vector2 oldPosition = js.Location;          //stores the previous position of the tile
+
+                            js.Location = empty.Location;               //move tile to empty position
+                            empty.Location = oldPosition;               //move empty to old position of tile
+                        }
+                    }
+                }
+
+            }
+            moves = 0;
+        }
+
+        //button to solve the game
+        public void SolveGame()
+        {
+            for (int i = 0; i < 15; i++)
+            {
+                if (state == _gameStates._tile)
+                    currentTile[i].Location = currentBounds[i].Location;
+                if (state == _gameStates._jigsaw)
+                    currentJigsaw[i].Location = currentJigsaw[i].Location;
+            }
+            empty.Location = currentBounds[15].Location;
+
+            state = _gameStates._solved;
+        }
+
+        //update every object in the game i.e. tiles, boundary, etc.
+        public void UpdateObjects(float elapsed)
+        {
+            //for every button, check its position, boundary, and name
+            foreach (var button in currentButtons)
+            {
+                button.Update(elapsed);
+            }
+
+            if (state == _gameStates._tile)
+            {
+                //for every tile, check its position and boundary
+                foreach (var tile in currentTile)
+                {
+                    tile.Update(elapsed);
+                }
+
+                //for every boundary, check its position and boundary
+                foreach (var bounds in currentBounds)
+                {
+                    bounds.Update(elapsed);
+                }
+
+                //check its location and boundary
+                empty.Update(elapsed);
+            }
+
+            if (state == _gameStates._jigsaw)
+            {
+                //for every tile, check its position and boundary
+                foreach (var js in currentJigsaw)
+                {
+                    js.Update(elapsed);
+                }
+
+                //for every boundary, check its position and boundary
+                foreach (var bounds in currentBounds)
+                {
+                    bounds.Update(elapsed);
+                }
+
+                //check its location and boundary
+                empty.Update(elapsed);
+            }
+
+        }
+
+        //at the start, it spawns every tile, boundary, and empty tile in the end solution
+        public void CreateObjects()
+        {
+            //initialize lists
+            currentTile = new List<Tile>();
+            currentBounds = new List<Boundary>();
+            currentJigsaw = new List<Jigsaw>();
+
+            //set position of the first tile
+            int x = 1;
+            int y = 250;
+
+            //number value of tiles
+            int value = 0;
+
+            //for every boundary box, 
+            for (int i = 0; i < 16; i++)
+            {
+                currentBounds.Add(new Boundary(new Vector2(x * 78 + 450, y)));
+
+                //creates the 4x4 grid of tiles
+                if (x == 4)
+                { y += 78; x = 1; }
+                else { x++; }
+            }
+
+            //for loop to set each position one after another
+            for (int i = 0; i < 15; i++)
+            {
+                if (state == _gameStates._tile)
+                    currentTile.Add(new Tile(new Vector2(currentBounds[i].Location.X, currentBounds[i].Location.Y), Content.Load<Texture2D>("tile_piece"), ++value, ""));
+                if (state == _gameStates._jigsaw)
+                {
+                    currentJigsaw.Add(new Jigsaw(new Vector2(currentBounds[i].Location.X, currentBounds[i].Location.Y), Content.Load<Texture2D>("tile_piece")));
+                }
+            }
+
+            empty = new Empty(new Vector2(currentBounds[15].Location.X, currentBounds[15].Location.Y),
+                Content.Load<Texture2D>("tile_piece"));
+        }
+
+        //create the buttons
+        public void CreateButtons()
+        {
+            //initialize list
+            currentButtons = new List<Button>();
+
+            //if statements for multiple menus/UI
+            if (state == _gameStates._start)
+            {
+                currentButtons.Add(new Button(new Vector2(550, 400), buttonImage, "15 Puzzle"));
+                currentButtons.Add(new Button(new Vector2(650, 400), buttonImage, "Jigsaw"));
+                currentButtons.Add(new Button(new Vector2(750, 400), buttonImage, "Quit"));
+            }
+            if (state == _gameStates._tile || state == _gameStates._jigsaw)
+            {
+                currentButtons.Add(new Button(new Vector2(450, 800), buttonImage, "Shuffle"));
+                currentButtons.Add(new Button(new Vector2(650, 800), buttonImage, "Solve"));
+                currentButtons.Add(new Button(new Vector2(850, 800), buttonImage, "Menu"));
+            }
+            if (state == _gameStates._solved)
+            {
+                currentButtons.Add(new Button(new Vector2(650, 600), buttonImage, "Restart"));
+            }
+            if (state == _gameStates._win)
+                currentButtons.Add(new Button(new Vector2(650, 600), buttonImage, "Menu"));
+        }
+
+        //button names are passed through here when clicked on
+        public void ButtonEvent(string buttonName)
+        {
+            //tile button
+            if (buttonName == "15 Puzzle")
+            {
+                state = _gameStates._tile;
+                CreateObjects();
+                Shuffle(rng.Next(min, max));
+            }
+
+            //jigsaw button
+            if (buttonName == "Jigsaw")
+            {
+                state = _gameStates._jigsaw;
+                CreateObjects();
+                Shuffle(rng.Next(min, max));
+            }
+
+            //quit button
+            if (buttonName == "Quit")
+                Exit();
+
+            //shuffle button
+            if (buttonName == "Shuffle")
+                Shuffle(rng.Next(min, max));
+
+            //solve button
+            if (buttonName == "Solve")
+                SolveGame();
+
+            //menu button
+            if (buttonName == "Menu")
+                state = _gameStates._start;
+
+            //restart button
+            if (buttonName == "Restart")
+            {
+                state = _gameStates._start;
+                Shuffle(rng.Next(min, max));
+            }
+        }
+
+        //handles all object clicked events
+        public void ClickOnObjects()
+        {
+            mouseState = Mouse.GetState();      //set the mouse
+
+            //when playing the game, the player can click and move the tiles
+            if (state == _gameStates._tile)
+            {
+                //for every tile that can be clicked, perform an action
+                foreach (var tp in currentTile)
+                {
+                    //local variables
+                    Rectangle area = tp.Bounds;                                     //rectangle around each tile, derived from Square class
+                    mousePos = new Point(mouseState.X, mouseState.Y);               //position of the mouse
+                    float distance = Vector2.Distance(empty.Location, tp.Location); //distance between empty tile and each tile
+
+                    //if the mouse is in a tile, && the left button is clicked, && the tile is close enough = swap tiles
+                    if (area.Contains(mousePos) && mouseState.LeftButton == ButtonState.Pressed && previousMs.LeftButton == ButtonState.Released && distance == 78)
+                    {
+                        Vector2 oldPosition = tp.Location;          //stores the previous position of the tile
+                        moves++;                                    //number of moves increased
+                        tp.Location = empty.Location;               //move tile to empty position
+                        empty.Location = oldPosition;               //move empty to old position of tile
+
+                        ProgressCheck();                            //check after the swap, if the player has won
+                    }
+                }
+            }
+
+            //when playing the game, the player can click and move the jigsaw
+            if (state == _gameStates._jigsaw)
+            {
+                //for every tile that can be clicked, perform an action
+                foreach (var js in currentJigsaw)
+                {
+                    //local variables
+                    Rectangle area = js.Bounds;                                     //rectangle around each tile, derived from Square class
+                    mousePos = new Point(mouseState.X, mouseState.Y);               //position of the mouse
+                    float distance = Vector2.Distance(empty.Location, js.Location); //distance between empty tile and each tile
+
+                    //if the mouse is in a tile, && the left button is clicked, && the tile is close enough = swap tiles
+                    if (area.Contains(mousePos) && mouseState.LeftButton == ButtonState.Pressed && previousMs.LeftButton == ButtonState.Released && distance == 78)
+                    {
+                        Vector2 oldPosition = js.Location;          //stores the previous position of the tile
+                        moves++;                                    //number of moves increased
+                        js.Location = empty.Location;               //move tile to empty position
+                        empty.Location = oldPosition;               //move empty to old position of tile
+
+                        ProgressCheck();                            //check after the swap, if the player has won
+                    }
+                }
+            }
+
+            //for every button clicked on, pass through to ButtonEvent
+            foreach (var button in currentButtons)
+            {
+                //local variables
+                Rectangle area = button.Bounds;                                     //rectangle around each tile, derived from Square class
+                mousePos = new Point(mouseState.X, mouseState.Y);               //position of the mouse
+
+                //if the mouse is in a tile, && the left button is clicked, && the tile is close enough = swap tiles
+                if (area.Contains(mousePos) && mouseState.LeftButton == ButtonState.Pressed && previousMs.LeftButton == ButtonState.Released)
+                {
+                    //pass the name of the button through to ButtonEvent
+                    ButtonEvent(button.name);
+                }
+            }
+            //sets the previous mouse state
+            previousMs = Mouse.GetState();
+        }
+
+        //if statements to check if each tile is in its appropriate boundary box
+        public void ProgressCheck()
+        {
+            int i;
+            int x = 1;
+
+            if (state == _gameStates._tile)
+            {
+                for (i = 0; i < 15; i++)
+                {
+                    if (currentTile[i].Location == currentBounds[x].Location)
+                    {
+                        x++;
+                    }
+                }
+
+                if (x == 15)
+                    state = _gameStates._win;
+            }
+
+            if (state == _gameStates._jigsaw)
+            {
+                for (i = 0; i < 15; i++)
+                {
+                    if (currentJigsaw[i].Location == currentBounds[x].Location)
+                    {
+                        x++;
+                    }
+                }
+
+                if (x == 15)
+                    state = _gameStates._win;
+            }
+        }
+
+        //draws everything listed below, at the same rate as Update
+        protected override void Draw(GameTime gameTime)
+        {
+            GraphicsDevice.Clear(Color.Black);             //clears the screen
+
+            spriteBatch.Begin();
+
+            //draw the background at Vector.Zero, and the whole size of the window
+            spriteBatch.Draw(backgroundTexture, new Rectangle(0, 0, Window.ClientBounds.Width, Window.ClientBounds.Height), null, Color.White);
+
+            switch (state)
+            {
+                case _gameStates._start:
+                    //start of the game
+                    break;
+                case _gameStates._tile:
+                    //playing the game
+                    spriteBatch.DrawString(basicFont, "Moves: " + moves, new Vector2(650, 200), Color.Black);               //draws the moves text
+                    foreach (var tilePiece in currentTile)
+                    {
+                        tilePiece.Draw(spriteBatch);                //draws each tile
+
+                        //creates the font with the number value
+                        spriteBatch.DrawString(basicFont, "" + tilePiece.NumTile,
+                            new Vector2(tilePiece.Location.X + 30, tilePiece.Location.Y + 30), Color.Black);
+                    }
+
+                    //draws the empty tile
+                    empty.Draw(spriteBatch);
+                    break;
+                case _gameStates._jigsaw:
+                    //playing the game
+                    spriteBatch.DrawString(basicFont, "Moves: " + moves, new Vector2(650, 200), Color.Black);               //draws the moves text
+                    foreach (var js in currentJigsaw)
+                    {
+                        spriteBatch.Draw(jigsawImage, js.Bounds, Color.White);
+                    }
+
+
+                    //draws the empty tile
+                    empty.Draw(spriteBatch);
+                    break;
+                case _gameStates._solved:
+                    //solve has been pressed
+                    foreach (var tilePiece in currentTile)
+                    {
+                        tilePiece.Draw(spriteBatch);                //draws each tile
+
+                        //creates the font with the number value
+                        spriteBatch.DrawString(basicFont, "" + tilePiece.NumTile, new Vector2(tilePiece.Location.X + 30, tilePiece.Location.Y + 30), Color.Black);
+                    }
+
+                    //draws the empty tile
+                    empty.Draw(spriteBatch);
+                    break;
+                case _gameStates._win:
+                    //player has solved the puzzle
+                    spriteBatch.DrawString(basicFont, "You've Won", new Vector2(GAME_WIDTH / 2 - 50, 300), Color.Black);
+                    break;
+                default:
+                    //when none of the game states have been declared
+                    Console.WriteLine("Something went wrong.");
+                    break;
+            }
+
+            //draws the buttons
+            foreach (var button in currentButtons)
+            {
+                button.Draw(spriteBatch);
+                spriteBatch.DrawString(basicFont, button.name,
+                    new Vector2(button.Location.X + 7, button.Location.Y + 7), Color.Black);
+            }
+
+            spriteBatch.End();
+            base.Draw(gameTime);
+        }
+    }
+}
