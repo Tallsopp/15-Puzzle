@@ -1,0 +1,35 @@
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Module_3
+{
+    class Button:Object
+    {
+        //members of Tile
+        public string name;
+        private Texture2D image;
+
+        //constructor
+        public Button(Vector2 location, Texture2D image, string name) : base(location)
+        {
+            this.image = image;
+            Bounds = new Rectangle((int)location.X, (int)location.Y, 100, 41);
+            this.name = name;
+        }
+
+        virtual public void Draw(SpriteBatch sb)
+        {
+            sb.Draw(image, Location);
+        }
+
+        ~Button()
+        {
+
+        }
+    }
+}
