@@ -1,0 +1,31 @@
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Module_3
+{
+    class Tile:Empty
+    {
+        //members of Tile
+        public int NumTile;
+        private Texture2D image;
+
+        //constructor
+        public Tile(Vector2 location, Texture2D image, int numTile, string text) : base(location, image)
+        {
+            this.image = image;
+            Bounds = new Rectangle((int)location.X, (int)location.Y, image.Width, image.Height);
+            NumTile = numTile;
+            text = numTile.ToString();
+        }
+
+        ~Tile()
+        {
+
+        }
+    }
+}
