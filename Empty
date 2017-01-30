@@ -1,0 +1,31 @@
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Module_3
+{
+    class Empty : Object
+    {
+        private Texture2D image;
+
+        public Empty(Vector2 location, Texture2D image) : base(location)
+        {
+            this.image = image;
+        }
+
+        virtual public void Draw(SpriteBatch sb)
+        {
+            sb.Draw(image, Location);
+        }
+
+        ~Empty()
+        {
+
+        }
+
+    }
+}
